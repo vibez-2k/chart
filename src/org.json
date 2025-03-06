@@ -1,0 +1,96 @@
+{
+  "tradingName": "Coca-Cola India",
+  "organizationChildRelationship": [
+    {
+      "tradingName": "Coca-Cola Maharashtra",
+      "organizationChildRelationship": [
+        {
+          "tradingName": "Coca-Cola Mumbai",
+          "account": [
+            {
+              "name": "Account 7",
+              "product": { "name": "600 Plans" }
+            },
+            {
+              "name": "Account 8",
+              "product": { "name": "300 Plans" }
+            }
+          ]
+        },
+        {
+          "tradingName": "Coca-Cola Pune",
+          "account": [
+            {
+              "name": "Account 9",
+              "product": { "name": "350 Plans" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tradingName": "Coca-Cola Karnataka",
+     
+      "organizationChildRelationship": [
+        {
+          "tradingName": "Coca-Cola Mumbai",
+          "account": [
+            {
+              "name": "Account 7",
+              "product": { "name": "600 Plans" }
+            },
+            {
+              "name": "Account 8",
+              "product": { "name": "300 Plans" }
+            },
+            {
+              "name": "Account 1",
+              "product": { "name": "300 Plans" }
+            },
+            {
+              "name": "Account 2",
+              "product": { "name": "300 Plans" }
+            },
+            {
+              "name": "Account 3",
+              "product": { "name": "300 Plans" }
+            }
+          ]
+        },
+        {
+          "tradingName": "Coca-Cola Pune",
+          "account": [
+            {
+              "name": "Account 9",
+              "product": { "name": "350 Plans" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tradingName": "Coca-Cola Gujarat",
+     
+      "organizationChildRelationship": [
+        {
+          "tradingName": "Coca-Cola Ahmedabad",
+          "account": [
+            {
+              "name": "Account 15",
+              "product": { "name": "400 Plans" }
+            }
+          ]
+        },
+        {
+          "tradingName": "Coca-Cola Surat",
+          "account": [
+            {
+              "name": "Account 16",
+              "product": { "name": "250 Plans" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
