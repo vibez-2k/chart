@@ -298,3 +298,132 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+function Node({ o, parent }) {
+  const [collapsed, setCollapsed] = useState(o.collapsed);
+
+  const handleCollapse = () => {
+    setCollapsed(!collapsed);
+  };
+
+  useEffect(() => {
+    o.collapsed = collapsed;
+  }, [collapsed]);
+
+  const T = parent
+    ? TreeNode
+    : (props) => (
+        <Tree
+          {...props}
+          lineWidth={collapsed ? "0px" : "2px"}
+          lineColor={collapsed ? "transparent" : "#bbc"}
+          lineBorderRadius={"12px"}
+        >
+          {props.children}
+        </Tree>
+      );
+
+  return collapsed ? (
+    <T
+      label={
+        <Organization
+          org={o}
+          onCollapse={handleCollapse}
+          collapsed={collapsed}
+        />
+      }
+    />
+  ) : (
+    <T
+      label={
+        <Organization
+          org={o}
+          onCollapse={handleCollapse}
+          collapsed={collapsed}
+        />
+      }
+    >
+      {_.map(o.account, (a) => (
+        <TreeNode key={a.name} label={<Account a={a} />}>
+          {/* <TreeNode label={<Product p={a.product} />} /> */}
+        </TreeNode>
+      ))}
+      {_.map(o.organizationChildRelationship, (c) => (
+        <Node key={c.tradingName} o={c} parent={o} collapsed={collapsed} />
+      ))}
+    </T>
+  );
+}
+
+
+
+function Node({ o, parent }) {
+  // Use local collapsed state for each node
+  const [collapsed, setCollapsed] = useState(true);
+  const [childrenVisible, setChildrenVisible] = useState(false);
+
+  const handleCollapse = () => {
+    // Toggle collapsed state
+    setCollapsed(!collapsed);
+    
+    // If expanding, show children
+    if (collapsed) {
+      setChildrenVisible(true);
+    }
+  };
+
+  const hasAccounts = o.account && o.account.length > 0;
+  const hasChildren = o.organizationChildRelationship && o.organizationChildRelationship.length > 0;
+
+  // Create a custom Tree component that conditionally renders lines
+  const CustomTree = props => (
+    <Tree
+      {...props}
+      lineWidth={"3px"}
+      lineColor={"#bbc"}
+      lineBorderRadius={"12px"}
+    >
+      {props.children}
+    </Tree>
+  );
+
+  // Create a custom TreeNode component that conditionally renders lines
+  const CustomTreeNode = props => (
+    <TreeNode
+      {...props}
+      lineWidth={!collapsed ? "2px" : "0px"} // Hide line when collapsed
+      lineColor={!collapsed ? "#bbc" : "transparent"} // Make line transparent when collapsed
+    >
+      {props.children}
+    </TreeNode>
+  );
+
+  const T = parent ? CustomTreeNode : CustomTree;
+  // const T = CustomTreeNode ;
+
+  return (
+    <T
+      label={
+        <div>
+          <Organization
+            org={o}
+            onCollapse={handleCollapse}
+            collapsed={collapsed}
+          />
+          {/* Display accounts only if this node is expanded */}
+          {!collapsed && hasAccounts && <AccountsContainer accounts={o.account} />}
+        </div>
+      }
+    >
+      {/* Show child organizations only if not collapsed and children are visible */}
+      {!collapsed && childrenVisible && hasChildren && 
+        _.map(o.organizationChildRelationship, (c) => (
+          <Node key={c.tradingName} o={c} parent={o} />
+        ))
+      }
+    </T>
+  );
+}

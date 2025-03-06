@@ -5,7 +5,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import _ from 'lodash';
 import organization from './org.json';
 
-import { ArrowBigDown, ArrowBigDownDash, ArrowBigDownDashIcon, ArrowBigDownIcon } from 'lucide-react';
+import { ArrowBigDown, ArrowBigDownDash, ArrowBigDownDashIcon, ArrowBigDownIcon, ArrowBigUp } from 'lucide-react';
 
 const cardStyle = {
   background: 'white',
@@ -52,16 +52,13 @@ const menuItemStyle = {
   cursor: 'pointer'
 };
 
-// Style for accounts container
+// Style for accounts container - modified to display vertically
 const accountsContainerStyle = {
   display: 'flex',
-  // flexDirection: 'column',
-  flexWrap: 'wrap',
-  // justifyContent: 'flex-start',
+  flexDirection: 'column', // Changed to column for vertical layout
   padding: '12px',
   background: '#f6f6f6',
   borderRadius: '12px',
-  // margin: '12px',
   minWidth: '100px'
 };
 
@@ -109,7 +106,7 @@ function Organization({ org, onCollapse, collapsed }) {
           }} 
           onClick={onCollapse}
         >
-          {collapsed ? <ArrowBigDown /> : <ArrowBigDownDash />}
+          {collapsed ? <ArrowBigDown /> : <ArrowBigUp />}
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 'bold' }}>{org.tradingName}</div>
@@ -184,7 +181,7 @@ function Account({ a }) {
         cursor: 'pointer',
         opacity: isDragging ? 0.4 : 1,
         margin: '8px',
-        width: '150px'  // Fixed width for column-like appearance
+        width: '90%' // Changed to percentage for better responsiveness in vertical layout
       }}
     >
       <div style={headerStyle}>
@@ -238,33 +235,49 @@ function initializeCollapsedState(orgData) {
 function Node({ o, parent }) {
   // Use local collapsed state for each node
   const [collapsed, setCollapsed] = useState(true);
-  const [childrenVisible, setChildrenVisible] = useState(false);
-
+  
   const handleCollapse = () => {
-    // Toggle collapsed state
     setCollapsed(!collapsed);
-    
-    // If expanding, show children
-    if (collapsed) {
-      setChildrenVisible(true);
-    }
   };
 
   const hasAccounts = o.account && o.account.length > 0;
   const hasChildren = o.organizationChildRelationship && o.organizationChildRelationship.length > 0;
+  
+  // Key fix: Don't create any TreeNode components if the parent is collapsed
+  // This effectively prevents any lines from being rendered when the parent is collapsed
+  if (parent && parent.collapsed) {
+    return null;
+  }
 
-  const T = parent
-    ? TreeNode
-    : (props) => (
-        <Tree
-          {...props}
-          lineWidth={"2px"}
-          lineColor={"#bbc"}
-          lineBorderRadius={"12px"}
-        >
-          {props.children}
-        </Tree>
-      );
+  // Only render lines when the node itself is expanded
+  const lineWidth = !collapsed && hasChildren ? "2px" : "0px";
+  const lineColor = !collapsed && hasChildren ? "#bbc" : "transparent";
+
+  // Create a custom Tree component for the root node
+  const CustomTree = props => (
+    <Tree
+      {...props}
+      lineWidth={lineWidth}
+      lineColor={lineColor}
+      lineBorderRadius="12px"
+    >
+      {props.children}
+    </Tree>
+  );
+
+  // Create a custom TreeNode component for all non-root nodes
+  const CustomTreeNode = props => (
+    <TreeNode
+      {...props}
+      lineWidth={lineWidth}
+      lineColor={lineColor}
+    >
+      {props.children}
+    </TreeNode>
+  );
+
+  // Select the appropriate component based on whether this is a root or child node
+  const T = parent ? CustomTreeNode : CustomTree;
 
   return (
     <T
@@ -280,10 +293,10 @@ function Node({ o, parent }) {
         </div>
       }
     >
-      {/* Show child organizations only if not collapsed and children are visible */}
-      {!collapsed && childrenVisible && hasChildren && 
+      {/* Only render children if the node is expanded */}
+      {!collapsed && hasChildren && 
         _.map(o.organizationChildRelationship, (c) => (
-          <Node key={c.tradingName} o={c} parent={o} />
+          <Node key={c.tradingName} o={c} parent={{...o, collapsed}} />
         ))
       }
     </T>
