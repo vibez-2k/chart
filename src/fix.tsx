@@ -21,7 +21,7 @@ import {
   toggleNodeExpanded
 } from './transformToNodes';
 
-import HierarchicalNode from './car2';
+import HierarchicalNode from './HierarchicalNode';
 
 const DataMapFlow = () => {
   // State for hierarchical data structure
