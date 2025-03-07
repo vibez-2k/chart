@@ -19,20 +19,23 @@ export const transformToNodes = (
   parentX: number = 0,
   parentY: number = 0,
   level: number = 0,
-  horizontalSpacing: number = 200,
-  verticalSpacing: number = 100,
+  horizontalSpacing: number = 300, // Increased from 200
+  verticalSpacing: number = 150,   // Increased from 100
   parentExpanded: boolean = true,
   allParentsVisible: boolean = true
 ): AppNode[] => {
   let nodes: AppNode[] = [];
-  const levelWidth = data.length * horizontalSpacing;
+  
+  // Calculate total width needed for this level
+  const levelWidth = Math.max(data.length * horizontalSpacing, horizontalSpacing);
   
   data.forEach((item, index) => {
     // Calculate position based on level and index
+    // Center the nodes better with more space between them
     const x = parentX + (index - (data.length - 1) / 2) * horizontalSpacing;
     const y = parentY + verticalSpacing;
     
-    // Set initial expanded state (all collapsed by default)
+    // Set initial expanded state (all collapsed by default, unless explicitly set)
     const expanded = item.expanded !== undefined ? item.expanded : false;
     
     // Create node for current item
@@ -56,12 +59,22 @@ export const transformToNodes = (
     
     // Process children recursively if they exist
     if (item.children && item.children.length > 0) {
+      // Adjust the spacing multiplier based on the number of children and level
+      // This ensures wider spacing for nodes with many children
+      const childSpacingMultiplier = Math.max(0.8, 1 - (level * 0.05));
+      const childHorizontalSpacing = horizontalSpacing * childSpacingMultiplier;
+      
+      // Calculate wider spacing for nodes with more children
+      const adjustedHorizontalSpacing = item.children.length > 3 
+        ? childHorizontalSpacing * (1 + (item.children.length - 3) * 0.1)
+        : childHorizontalSpacing;
+      
       const childNodes = transformToNodes(
         item.children,
         x,
         y,
         level + 1,
-        horizontalSpacing * 0.8, // Reduce spacing for deeper levels
+        adjustedHorizontalSpacing,
         verticalSpacing,
         expanded,
         allParentsVisible && expanded // Children are visible only if this node is expanded and visible
@@ -74,6 +87,7 @@ export const transformToNodes = (
 };
 
 // Function to create edges between nodes
+// Function to create edges between nodes with better routing
 export const createEdges = (data: HierarchicalItem[]): Edge[] => {
   let edges: Edge[] = [];
   
@@ -86,7 +100,10 @@ export const createEdges = (data: HierarchicalItem[]): Edge[] => {
           source: item.id,
           target: child.id,
           type: 'smoothstep',
-          style: { stroke: '#555' }
+          style: { stroke: '#555', strokeWidth: 1.5 },
+          // Add some curvature to help with edge visualization
+          sourceHandle: 'bottom',
+          targetHandle: 'top'
         });
         
         // Process child's children
@@ -94,7 +111,7 @@ export const createEdges = (data: HierarchicalItem[]): Edge[] => {
       });
     }
     
-    // Create same-level relationship edges
+    // Create same-level relationship edges with improved styling
     if (item.sameLevelParentId && item.sameLevelParentId !== "") {
       edges.push({
         id: `${item.sameLevelParentId}->${item.id}-relation`,
@@ -102,7 +119,12 @@ export const createEdges = (data: HierarchicalItem[]): Edge[] => {
         target: item.id,
         type: 'straight',
         animated: true,
-        style: { stroke: '#f6ab6c', strokeWidth: 2, strokeDasharray: '5,5' }
+        style: { stroke: '#f6ab6c', strokeWidth: 1.5, strokeDasharray: '5,5' },
+        // Add markers to make relationships clearer
+        markerEnd: {
+          type: 'arrow',
+          color: '#f6ab6c',
+        }
       });
     }
   };
@@ -248,6 +270,27 @@ const hierarchicalData = [
                 parentId: "6",
                 sameLevelParentId: "",
               },
+              {
+                id: "19",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l3",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
+              {
+                id: "20",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l4",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
+              {
+                id: "21",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l5",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
             ],
           },
         ],
@@ -354,3 +397,4 @@ export const nodeTypes = {
 export const edgeTypes = {
   // Add your custom edge types here
 } satisfies EdgeTypes;
+

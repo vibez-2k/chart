@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import {
   ReactFlow, 
   MiniMap,
@@ -7,7 +7,8 @@ import {
   useNodesState,
   useEdgesState,
   Panel,
-  NodeTypes
+  NodeTypes,
+  ReactFlowInstance
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -26,6 +27,9 @@ import HierarchicalNode from './HierarchicalNode';
 const DataMapFlow = () => {
   // State for hierarchical data structure
   const [hierarchicalData, setHierarchicalData] = useState(initialHierarchicalData);
+  
+  // Keep reference to ReactFlow instance
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
   
   // Custom node types including our HierarchicalNode
   const customNodeTypes: NodeTypes = {
@@ -50,8 +54,16 @@ const DataMapFlow = () => {
     setNodes(newNodes);
     setEdges(newEdges);
     
-    // You might want to recenter the view after expanding/collapsing
-    // This would require a reference to the ReactFlow instance
+    // After expanding/collapsing, fit view with some delay
+    // to give time for the layout to update
+    setTimeout(() => {
+      if (reactFlowInstanceRef.current) {
+        reactFlowInstanceRef.current.fitView({ 
+          padding: 0.2, 
+          includeHiddenNodes: false 
+        });
+      }
+    }, 50);
   }, [hierarchicalData, setNodes, setEdges]);
   
   // Pass the toggle handler to nodes
@@ -65,6 +77,11 @@ const DataMapFlow = () => {
     }));
   }, [nodes, handleToggleExpand]);
 
+  // Store reference to ReactFlow instance
+  const onInit = (flowInstance: ReactFlowInstance) => {
+    reactFlowInstanceRef.current = flowInstance;
+  };
+
   return (
     <div style={{ width: '100%', height: '800px' }}>
       <ReactFlow
@@ -74,10 +91,19 @@ const DataMapFlow = () => {
         onEdgesChange={onEdgesChange}
         nodeTypes={customNodeTypes}
         edgeTypes={edgeTypes}
+        onInit={onInit}
         fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.1}
+        maxZoom={1.5}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
       >
         <Controls />
-        <MiniMap />
+        <MiniMap 
+          nodeStrokeWidth={3}
+          zoomable
+          pannable
+        />
         <Background variant="dots" gap={12} size={1} />
         <Panel position="top-right">
           <div className="legend">

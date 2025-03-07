@@ -46,7 +46,12 @@ export const HierarchicalNode = memo<NodeProps<CustomNodeData>>(({ id, data, sel
       className={`${getNodeClass()} ${selected ? 'selected' : ''} ${hasChildren ? 'has-children' : ''}`}
       onClick={handleNodeClick}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        id="top"
+        style={{ background: '#555', width: '8px', height: '8px' }}
+      />
       
       <div className="node-header">
         <div className="node-type-indicator">{type}</div>
@@ -61,7 +66,12 @@ export const HierarchicalNode = memo<NodeProps<CustomNodeData>>(({ id, data, sel
         <div className="node-label">{label}</div>
       </div>
       
-      <Handle type="source" position={Position.Bottom} />
+      <Handle 
+        type="source" 
+        position={Position.Bottom} 
+        id="bottom"
+        style={{ background: '#555', width: '8px', height: '8px' }}
+      />
     </div>
   );
 });
