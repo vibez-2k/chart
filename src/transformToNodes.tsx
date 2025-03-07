@@ -19,19 +19,15 @@ export const transformToNodes = (
   parentX: number = 0,
   parentY: number = 0,
   level: number = 0,
-  horizontalSpacing: number = 300, // Increased from 200
-  verticalSpacing: number = 150,   // Increased from 100
+  horizontalSpacing: number = 300, // Spacing between nodes on the same level
+  verticalSpacing: number = 150,   // Spacing between different levels
   parentExpanded: boolean = true,
   allParentsVisible: boolean = true
 ): AppNode[] => {
   let nodes: AppNode[] = [];
   
-  // Calculate total width needed for this level
-  const levelWidth = Math.max(data.length * horizontalSpacing, horizontalSpacing);
-  
   data.forEach((item, index) => {
     // Calculate position based on level and index
-    // Center the nodes better with more space between them
     const x = parentX + (index - (data.length - 1) / 2) * horizontalSpacing;
     const y = parentY + verticalSpacing;
     
@@ -59,49 +55,131 @@ export const transformToNodes = (
     
     // Process children recursively if they exist
     if (item.children && item.children.length > 0) {
-      // Adjust the spacing multiplier based on the number of children and level
-      // This ensures wider spacing for nodes with many children
-      const childSpacingMultiplier = Math.max(0.8, 1 - (level * 0.05));
-      const childHorizontalSpacing = horizontalSpacing * childSpacingMultiplier;
+      // Special handling for column children - create a single container node
+      const columnChildren = item.children.filter(child => child.type === 'column');
+      const nonColumnChildren = item.children.filter(child => child.type !== 'column');
       
-      // Calculate wider spacing for nodes with more children
-      const adjustedHorizontalSpacing = item.children.length > 3 
-        ? childHorizontalSpacing * (1 + (item.children.length - 3) * 0.1)
-        : childHorizontalSpacing;
+      // Create a single container node for all columns if there are any
+      if (columnChildren.length > 0) {
+        const columnsContainerId = `${item.id}-columns`;
+        const columnLabels = columnChildren.map(c => c.label);
+        
+        // Calculate position for columns container node
+        const columnsContainerNode: AppNode = {
+          id: columnsContainerId,
+          type: 'hierarchical-node',
+          position: { x, y: y + verticalSpacing },
+          data: {
+            label: 'Columns',
+            type: 'columns-container',
+            isColumnsContainer: true,
+            columnLabels: columnLabels,
+            expanded: false,
+            hasChildren: false
+          },
+          style: {
+            background: '#f9ebff',
+            border: '1px solid #8E44AD',
+            width: '220px'
+          },
+          hidden: !allParentsVisible || !expanded
+        };
+        
+        nodes.push(columnsContainerNode);
+        
+        // Add edge from parent to columns container
+        const columnsContainerEdge: Edge = {
+          id: `${item.id}->${columnsContainerId}`,
+          source: item.id,
+          target: columnsContainerId,
+          type: 'straight',
+          style: { 
+            stroke: '#8E44AD', 
+            strokeWidth: 1.5,
+            strokeDasharray: '4,2'
+          },
+          sourceHandle: 'bottom',
+          targetHandle: 'top'
+        };
+        
+        // We can't add edges here, so we'll handle this in the edges creation
+      }
       
-      const childNodes = transformToNodes(
-        item.children,
-        x,
-        y,
-        level + 1,
-        adjustedHorizontalSpacing,
-        verticalSpacing,
-        expanded,
-        allParentsVisible && expanded // Children are visible only if this node is expanded and visible
-      );
-      nodes = [...nodes, ...childNodes];
+      // Process non-column children normally
+      if (nonColumnChildren.length > 0) {
+        const childSpacingMultiplier = Math.max(0.8, 1 - (level * 0.05));
+        const childHorizontalSpacing = horizontalSpacing * childSpacingMultiplier;
+        
+        const adjustedHorizontalSpacing = nonColumnChildren.length > 3 
+          ? childHorizontalSpacing * (1 + (nonColumnChildren.length - 3) * 0.1)
+          : childHorizontalSpacing;
+        
+        // Offset Y position if we added a columns container
+        const offsetY = columnChildren.length > 0 ? verticalSpacing : 0;
+        
+        const childNodes = transformToNodes(
+          nonColumnChildren,
+          x,
+          y + offsetY,
+          level + 1,
+          adjustedHorizontalSpacing,
+          verticalSpacing,
+          expanded,
+          allParentsVisible && expanded
+        );
+        
+        nodes = [...nodes, ...childNodes];
+      }
     }
   });
   
   return nodes;
 };
 
-// Function to create edges between nodes
+
+
+
+// Function to create edges between nodes with better routing
 // Function to create edges between nodes with better routing
 export const createEdges = (data: HierarchicalItem[]): Edge[] => {
   let edges: Edge[] = [];
   
   const processItem = (item: HierarchicalItem) => {
-    // Create parent-child edges
     if (item.children && item.children.length > 0) {
-      item.children.forEach(child => {
+      // Identify column and non-column children
+      const columnChildren = item.children.filter(child => child.type === 'column');
+      const nonColumnChildren = item.children.filter(child => child.type !== 'column');
+      
+      // Add edge to columns container if we have column children
+      if (columnChildren.length > 0) {
+        const columnsContainerId = `${item.id}-columns`;
+        
+        edges.push({
+          id: `${item.id}->${columnsContainerId}`,
+          source: item.id,
+          target: columnsContainerId,
+          type: 'straight',
+          style: { 
+            stroke: '#8E44AD', 
+            strokeWidth: 1.5,
+            strokeDasharray: '4,2'
+          },
+          sourceHandle: 'bottom',
+          targetHandle: 'top'
+        });
+      }
+      
+      // Process non-column children normally
+      nonColumnChildren.forEach(child => {
         edges.push({
           id: `${item.id}->${child.id}`,
           source: item.id,
           target: child.id,
           type: 'smoothstep',
-          style: { stroke: '#555', strokeWidth: 1.5 },
-          // Add some curvature to help with edge visualization
+          style: { 
+            stroke: '#555', 
+            strokeWidth: 1.5
+          },
           sourceHandle: 'bottom',
           targetHandle: 'top'
         });
@@ -120,7 +198,6 @@ export const createEdges = (data: HierarchicalItem[]): Edge[] => {
         type: 'straight',
         animated: true,
         style: { stroke: '#f6ab6c', strokeWidth: 1.5, strokeDasharray: '5,5' },
-        // Add markers to make relationships clearer
         markerEnd: {
           type: 'arrow',
           color: '#f6ab6c',
@@ -135,21 +212,15 @@ export const createEdges = (data: HierarchicalItem[]): Edge[] => {
   return edges;
 };
 
+
 // Map your custom types to React Flow node types
 const mapNodeType = (type: string): string => {
-  switch (type) {
-    case 'parent':
-      return 'hierarchical-node';
-    case 'schema':
-      return 'hierarchical-node';
-    case 'table':
-      return 'hierarchical-node';
-    case 'column':
-      return 'hierarchical-node';
-    default:
-      return 'hierarchical-node';
-  }
+  return 'hierarchical-node';
 };
+
+
+// Map your custom types to React Flow node types
+
 
 // Get styling based on node type
 const getNodeStyle = (type: string): React.CSSProperties => {
@@ -162,6 +233,8 @@ const getNodeStyle = (type: string): React.CSSProperties => {
       return { background: '#fff2e6', border: '1px solid #E67E22', borderRadius: '6px', padding: '8px' };
     case 'column':
       return { background: '#f9ebff', border: '1px solid #8E44AD', borderRadius: '4px', padding: '5px' };
+    case 'columns-container':
+      return { background: '#f9ebff', border: '1px solid #8E44AD', borderRadius: '6px', padding: '8px', width: '220px' };
     default:
       return {};
   }
@@ -177,7 +250,6 @@ export const getChildNodeIds = (nodeId: string, data: HierarchicalItem[]): strin
         if (item.children) {
           item.children.forEach(child => {
             childIds.push(child.id);
-            // Recursively find children of this child
             findChildren(item.children!, child.id);
           });
         }

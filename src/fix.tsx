@@ -11,6 +11,7 @@ import {
   ReactFlowInstance
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+// import './HierarchicalNode.css'; // Import the CSS file
 
 import { 
   initialFlowNodes, 
@@ -22,7 +23,7 @@ import {
   toggleNodeExpanded
 } from './transformToNodes';
 
-import HierarchicalNode from './HierarchicalNode';
+import HierarchicalNode from './hierarchicalnode';
 
 const DataMapFlow = () => {
   // State for hierarchical data structure
