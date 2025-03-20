@@ -14,6 +14,7 @@ interface HierarchicalItem {
 }
 
 // Function to transform hierarchical data to React Flow nodes
+// Function to transform hierarchical data to React Flow nodes with improved spacing
 export const transformToNodes = (
   data: HierarchicalItem[], 
   parentX: number = 0, 
@@ -39,33 +40,45 @@ export const transformToNodes = (
   const expandedItems = data.filter(item => item.expanded && item.children && item.children.length > 0);
   siblingContext.expandedSiblings = expandedItems.map(item => item.id);
 
-  // Calculate dynamic horizontal spacing based on how many siblings are expanded
-  const dynamicSpacing = horizontalSpacing * (1 + (expandedItems.length * 0.5)); // Increased factor for more space
-
+  // Calculate dynamic horizontal spacing based on level and sibling count
+  // Increase base spacing for higher levels with more children
+  const levelSpacingFactor = Math.max(1, 1 + (level * 0.2)); // Increase spacing at deeper levels
+  const siblingCountFactor = Math.max(1, 1 + (data.length * 0.1)); // More siblings = more space
+  const dynamicHorizontalSpacing = horizontalSpacing * levelSpacingFactor * siblingCountFactor;
+  
+  // Special handling for level 4 nodes (stacking vertically)
+  const isLevel4 = level === 3; // 0-based indexing, so level 3 is the 4th level
+  const verticalStackSpacing = isLevel4 ? 60 : verticalSpacing; // Tighter vertical spacing for stacked columns
+  
   // First pass: calculate the space needed by each expanded node's children
   const nodeWidths: Record<string, number> = {};
   const nodeTrees: Record<string, AppNode[]> = {};
+  const nodeHeights: Record<string, number> = {};
   
   data.forEach((item, index) => {
     if (item.children && item.children.length > 0 && item.expanded) {
       const expanded = item.expanded !== undefined ? item.expanded : false;
       
-      // Calculate child spacing parameters
+      // Calculate child spacing parameters based on level and child count
       const childLevel = level + 1;
-      const levelScaleFactor = Math.max(0.5, 1 - (childLevel * 0.1));
-      const siblingScaleFactor = 1 + (siblingContext.expandedSiblings?.length || 0) * 0.2;
-      const childHorizontalSpacing = horizontalSpacing * levelScaleFactor * siblingScaleFactor;
+      const isColumnLevel = item.type === 'table'; // Table's children are columns
       
-      // Further adjust based on number of children
+      // For columns (level 4), we'll stack vertically, so horizontal spacing is less important
+      const childHorizontalSpacing = isColumnLevel 
+        ? horizontalSpacing * 0.5 // Tighter horizontal spacing for columns
+        : dynamicHorizontalSpacing;
+      
+      // Calculate vertical spacing for column children (level 4)
+      const childVerticalSpacing = isColumnLevel
+        ? verticalStackSpacing // Tighter spacing for stacked columns
+        : verticalSpacing;
+        
+      // Adjust spacing based on number of children
       const childCountFactor = item.children.length > 3 
-        ? 1 + ((item.children.length - 3) * 0.2) // Increased factor
+        ? 1 + ((item.children.length - 3) * 0.2) 
         : 1;
       
       const adjustedHorizontalSpacing = childHorizontalSpacing * childCountFactor;
-      
-      // Calculate the width needed for this node's children tree
-      const childTreeWidth = item.children.length * adjustedHorizontalSpacing;
-      nodeWidths[item.id] = Math.max(childTreeWidth, horizontalSpacing);
       
       // Pre-calculate child nodes for later use
       const childContext = { 
@@ -74,105 +87,177 @@ export const transformToNodes = (
         horizontalOffset: 0
       };
       
-      // Position doesn't matter yet, we'll fix it later
-      nodeTrees[item.id] = transformToNodes(
-        item.children,
-        0,
-        0,
-        childLevel,
-        adjustedHorizontalSpacing,
-        verticalSpacing,
-        expanded,
-        allParentsVisible && expanded,
-        childContext
-      );
+      // For column level (level 4), use special positioning logic
+      if (isColumnLevel) {
+        // Position columns vertically stacked under their parent table
+        nodeTrees[item.id] = [];
+        let columnY = 0;
+        
+        item.children.forEach((child, childIndex) => {
+          const node: AppNode = {
+            id: child.id,
+            type: mapNodeType(child.type),
+            position: { 
+              x: 0, // Will be adjusted in the final pass
+              y: columnY 
+            },
+            data: {
+              label: child.label,
+              type: child.type,
+              expanded: false,
+              hasChildren: false
+            },
+            style: getNodeStyle(child.type),
+            hidden: !allParentsVisible
+          };
+          
+          nodeTrees[item.id].push(node);
+          
+          // Increment Y position for next column
+          columnY += verticalStackSpacing;
+        });
+        
+        // Track vertical height needed for this column group
+        nodeHeights[item.id] = item.children.length * verticalStackSpacing;
+        
+        // For columns, width is fixed
+        nodeWidths[item.id] = horizontalSpacing;
+      } else {
+        // Standard positioning for non-column nodes
+        nodeTrees[item.id] = transformToNodes(
+          item.children,
+          0, // Will be adjusted in final pass
+          0,
+          childLevel,
+          adjustedHorizontalSpacing,
+          childVerticalSpacing,
+          expanded,
+          allParentsVisible && expanded,
+          childContext
+        );
+        
+        // Calculate width based on children
+        const childTreeWidth = Math.max(
+          item.children.length * adjustedHorizontalSpacing,
+          nodeTrees[item.id].length > 0 ? 
+            Math.max(...nodeTrees[item.id].map(node => node.position.x)) + 100 : 
+            horizontalSpacing
+        );
+        
+        nodeWidths[item.id] = Math.max(childTreeWidth, horizontalSpacing);
+        
+        // Calculate height based on children
+        let maxChildDepth = 0;
+        Object.values(childContext.childHeights).forEach(height => {
+          maxChildDepth = Math.max(maxChildDepth, height);
+        });
+        
+        nodeHeights[item.id] = verticalSpacing + 
+          (maxChildDepth > 0 ? maxChildDepth : 0);
+      }
       
-      // Store the vertical space needed for this node's children
-      let maxChildDepth = 0;
-      Object.values(childContext.childHeights).forEach(height => {
-        maxChildDepth = Math.max(maxChildDepth, height);
-      });
-      
-      // Account for immediate children plus any deeper nested structure
-      siblingContext.childHeights![item.id] = verticalSpacing + 
-        (maxChildDepth > 0 ? maxChildDepth : 0);
+      // Store height for parent's reference
+      siblingContext.childHeights![item.id] = nodeHeights[item.id];
     } else {
       // Leaf nodes take up minimal space
       nodeWidths[item.id] = horizontalSpacing;
+      nodeHeights[item.id] = 0;
       siblingContext.childHeights![item.id] = 0;
     }
   });
 
-   // Calculate total width needed for this level
-   let totalWidth = 0;
-   data.forEach(item => {
-     totalWidth += nodeWidths[item.id];
-   });
-// Second pass: create parent nodes with adjusted horizontal spacing
-let currentX = parentX - (totalWidth / 2);
-data.forEach((item, index) => {
-  const nodeWidth = nodeWidths[item.id];
-  const nodeX = currentX + (nodeWidth / 2);
-  const nodeY = parentY + verticalSpacing;
+  // Calculate total width needed for this level
+  let totalWidth = 0;
+  data.forEach(item => {
+    totalWidth += nodeWidths[item.id];
+  });
   
-  currentX += nodeWidth;
+  // Add extra padding between nodes based on level
+  totalWidth += (data.length - 1) * (level * 20);
 
-  const expanded = item.expanded !== undefined ? item.expanded : false;
-
-  const node: AppNode = {
-    id: item.id,
-    type: mapNodeType(item.type),
-    position: { x: nodeX, y: nodeY },
-    data: {
-      label: item.label,
-      type: item.type,
-      expanded: expanded,
-      hasChildren: item.children && item.children.length > 0
-    },
-    style: getNodeStyle(item.type),
-    hidden: !allParentsVisible
-  };
-
-  nodes.push(node);
-});
-
- // Third pass: add children with proper positioning relative to their parents
- currentX = parentX - (totalWidth / 2);
-
- data.forEach((item, index) => {
-  if (item.children && item.children.length > 0 && item.expanded) {
-    const expanded = item.expanded !== undefined ? item.expanded : false;
+  // Second pass: create parent nodes with adjusted horizontal spacing
+  let currentX = parentX - (totalWidth / 2);
+  
+  data.forEach((item, index) => {
     const nodeWidth = nodeWidths[item.id];
+    // Add extra spacing between nodes at higher levels
+    const extraSpacing = level * 20;
     const nodeX = currentX + (nodeWidth / 2);
     const nodeY = parentY + verticalSpacing;
     
-    currentX += nodeWidth;
-    
-    if (nodeTrees[item.id]) {
-      // Adjust positions of pre-calculated child nodes
-      const adjustedChildNodes = nodeTrees[item.id].map(childNode => {
-        // Only adjust the absolute position, keeping the relative positions
-        const relativeX = childNode.position.x;
-        const relativeY = childNode.position.y;
-        
-        return {
-          ...childNode,
-          position: {
-            x: nodeX + relativeX,
-            y: nodeY + verticalSpacing + relativeY
-          }
-        };
-      });
-      
-      nodes = [...nodes, ...adjustedChildNodes];
-    }
-  } else {
-    // Skip leaf nodes in this pass
-    currentX += nodeWidths[item.id];
-  }
-});
+    currentX += nodeWidth + extraSpacing;
 
-return nodes;
+    const expanded = item.expanded !== undefined ? item.expanded : false;
+
+    const node: AppNode = {
+      id: item.id,
+      type: mapNodeType(item.type),
+      position: { x: nodeX, y: nodeY },
+      data: {
+        label: item.label,
+        type: item.type,
+        expanded: expanded,
+        hasChildren: item.children && item.children.length > 0
+      },
+      style: getNodeStyle(item.type),
+      hidden: !allParentsVisible
+    };
+
+    nodes.push(node);
+  });
+
+  // Third pass: add children with proper positioning relative to their parents
+  currentX = parentX - (totalWidth / 2);
+  
+  data.forEach((item, index) => {
+    if (item.children && item.children.length > 0 && item.expanded) {
+      const expanded = item.expanded !== undefined ? item.expanded : false;
+      const nodeWidth = nodeWidths[item.id];
+      const extraSpacing = level * 20;
+      const nodeX = currentX + (nodeWidth / 2);
+      const nodeY = parentY + verticalSpacing;
+      
+      currentX += nodeWidth + extraSpacing;
+      
+      if (nodeTrees[item.id]) {
+        if (item.type === 'table') {
+          // For table nodes with column children, stack the columns vertically
+          const adjustedChildNodes = nodeTrees[item.id].map((childNode, childIndex) => {
+            return {
+              ...childNode,
+              position: {
+                x: nodeX,
+                y: nodeY + verticalSpacing + (childIndex * verticalStackSpacing)
+              }
+            };
+          });
+          
+          nodes = [...nodes, ...adjustedChildNodes];
+        } else {
+          // For other node types, use standard positioning
+          const adjustedChildNodes = nodeTrees[item.id].map(childNode => {
+            const relativeX = childNode.position.x;
+            const relativeY = childNode.position.y;
+            
+            return {
+              ...childNode,
+              position: {
+                x: nodeX + relativeX,
+                y: nodeY + verticalSpacing + relativeY
+              }
+            };
+          });
+          
+          nodes = [...nodes, ...adjustedChildNodes];
+        }
+      }
+    } else {
+      // Skip leaf nodes in this pass
+      currentX += nodeWidths[item.id] + (level * 20);
+    }
+  });
+
+  return nodes;
 };
 
 
@@ -335,7 +420,7 @@ export const toggleNodeExpanded = (
   });
 };
 // Usage with your sample data
-const hierarchicalData = [
+const hierarchicalData =[
   {
     id: "1",
     type: "parent",
@@ -388,7 +473,44 @@ const hierarchicalData = [
               },
             ],
           },
-  
+          {
+            id: "66",
+            type: "table",
+            label: "LAMSAN02",
+            parentId: "2",
+            sameLevelParentId: "",
+            expanded: false,
+            children: [
+              {
+                id: "100",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l1",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
+              {
+                id: "190",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l3",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
+              {
+                id: "200",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l4",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
+              {
+                id: "210",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l5",
+                parentId: "6",
+                sameLevelParentId: "",
+              },
+            ],
+          },
         ],
       },
       {
@@ -414,9 +536,23 @@ const hierarchicalData = [
                 parentId: "7",
                 sameLevelParentId: "10",
               },
+              {
+                id: "110",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l2",
+                parentId: "7",
+                sameLevelParentId: "10",
+              },
+              {
+                id: "111",
+                type: "column",
+                label: "AN_INS_ADDR_LINE_l2",
+                parentId: "7",
+                sameLevelParentId: "10",
+              },
             ],
           },
-          
+
         ],
       },
       {
@@ -475,7 +611,7 @@ const hierarchicalData = [
       },
     ],
   },
-];
+]
 
 // Export hierarchical data for use in the component
 export const initialHierarchicalData = hierarchicalData;
